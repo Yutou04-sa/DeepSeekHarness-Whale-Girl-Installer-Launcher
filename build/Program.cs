@@ -71,7 +71,7 @@ internal static class Program
             }
             if (dshBin == null) throw new FileNotFoundException("安装完成后仍未找到 dsh 程序。");
 
-            splash.SetStatus("正在安装端口控制插件...");
+            splash.SetStatus("正在安装端口控制和插件市场...");
             string profile = EnsureProfile();
             PatchWebBranding(dshBin, profile);
             StartDsh(node, dshBin, profile);
@@ -114,12 +114,14 @@ internal static class Program
 
         Dictionary<string, object> dependencies = GetDictionary(package, "dependencies");
         dependencies["dsh-port-control"] = "file:./node_modules/dsh-port-control";
+        dependencies["dshmarket"] = "^1.15.0";
         Dictionary<string, object> dsh = GetDictionary(package, "dsh");
         Dictionary<string, object> profileConfig = GetDictionary(dsh, "profile");
         List<object> bundles = GetList(profileConfig, "bundles");
         AddBundle(bundles, "@deepseek-ai/dsh-base");
         AddBundle(bundles, "@deepseek-ai/dsh-web-app");
         AddBundle(bundles, "dsh-port-control");
+        AddBundle(bundles, "dshmarket");
 
         File.WriteAllText(packagePath, new JavaScriptSerializer().Serialize(package), new UTF8Encoding(false));
         string cordisPath = Path.Combine(profile, "cordis.yml");

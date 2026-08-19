@@ -2,7 +2,7 @@
 
 [中文](README.md) | English
 
-This is a pure C# installer and launcher for DeepSeek Harness Web on Windows. It prepares the dsh runtime, installs the bundled port-control plugin, starts the Web service, and opens a centered standalone Web app window using Edge, Chrome, or Brave.
+This is a pure C# installer and launcher for DeepSeek Harness Web on Windows. It prepares the dsh runtime, installs the bundled port-control plugin and the dshmarket plugin marketplace, starts the Web service, and opens a centered standalone Web app window using Edge, Chrome, or Brave.
 
 The launcher includes the Whale Girl startup animation and branded icon. It also changes the Web page title to "Whale Girl is ready, let's set sail!" and opens a fresh session by default without clearing browser sign-in or other profile settings.
 
@@ -10,6 +10,7 @@ The launcher includes the Whale Girl startup animation and branded icon. It also
 
 - `build/Program.cs`: WinForms launcher source.
 - `dsh-port-control/`: bundled port-control plugin providing `/dsh-stop`, `/dsh-restart`, and the fresh-session route.
+- `dshmarket`: the visual plugin marketplace installed from npm at startup (`^1.15.0`).
 - `download.gif`: Whale Girl startup animation.
 - `deepseek-harness.ico`: launcher icon.
 

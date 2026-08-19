@@ -1,0 +1,15 @@
+# Build output
+DeepSeekHarness.exe
+*.pdb
+bin/
+obj/
+
+# IDE and local machine state
+.vs/
+*.user
+*.suo
+
+# JavaScript dependencies and runtime data
+node_modules/
+.dsh/
+*.log

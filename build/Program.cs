@@ -16,8 +16,8 @@ using System.Text.RegularExpressions;
 [assembly: AssemblyDescription("DeepSeek Harness launcher")]
 [assembly: AssemblyProduct("DeepSeek Harness")]
 [assembly: AssemblyCompany("DeepSeek")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.0")]
 
 internal static class Program
 {
@@ -134,7 +134,7 @@ internal static class Program
                 pnpmArguments = "--yes pnpm " + pnpmArguments;
             }
         }
-        if (pnpm == null) throw new InvalidOperationException("未找到 npm，无法安装 dsh 插件依赖。");
+        if (pnpm == null) throw new InvalidOperationException("未找到 pnpm 或 npx，无法安装 dsh 插件依赖。");
         int installExitCode = RunAndWait(pnpm, pnpmArguments, profile);
         if (installExitCode != 0)
             throw new InvalidOperationException("dsh 插件依赖安装失败，退出码：" + installExitCode + "。请检查网络连接和 npm 日志。");
@@ -241,15 +241,6 @@ internal static class Program
         bundles.Add(name);
     }
 
-    private static void WriteResource(string resourceName, string target)
-    {
-        using (Stream source = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
-        {
-            if (source == null) throw new FileNotFoundException("Missing embedded resource: " + resourceName);
-            using (FileStream output = File.Create(target)) source.CopyTo(output);
-        }
-    }
-
     private static void StartDsh(string node, string dshBin, string profile)
     {
         string log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "dsh-web.log");
@@ -347,9 +338,39 @@ internal static class Program
         return null;
     }
 
+    private static ProcessStartInfo BuildStartInfo(string fileName, string arguments, string workingDirectory, bool redirectOutput)
+    {
+        ProcessStartInfo start;
+        if (fileName.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))
+        {
+            string commandLine = fileName + (String.IsNullOrEmpty(arguments) ? "" : " " + arguments);
+            start = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = "/c " + Quote(commandLine),
+                WorkingDirectory = workingDirectory ?? String.Empty,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+        }
+        else
+        {
+            start = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory ?? String.Empty,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+        }
+        if (redirectOutput) start.RedirectStandardOutput = true;
+        return start;
+    }
+
     private static int RunAndWait(string fileName, string arguments, string workingDirectory = null)
     {
-        using (Process process = Process.Start(new ProcessStartInfo { FileName = fileName, Arguments = arguments, WorkingDirectory = workingDirectory ?? String.Empty, UseShellExecute = false, CreateNoWindow = true }))
+        using (Process process = Process.Start(BuildStartInfo(fileName, arguments, workingDirectory, false)))
         {
             process.WaitForExit();
             return process.ExitCode;
@@ -358,7 +379,7 @@ internal static class Program
 
     private static string RunAndRead(string fileName, string arguments)
     {
-        using (Process process = Process.Start(new ProcessStartInfo { FileName = fileName, Arguments = arguments, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true }))
+        using (Process process = Process.Start(BuildStartInfo(fileName, arguments, null, true)))
         {
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();

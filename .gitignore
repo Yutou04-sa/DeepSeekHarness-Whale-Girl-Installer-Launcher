@@ -4,6 +4,10 @@ DeepSeekHarness.exe
 bin/
 obj/
 
+# Release archives
+*.zip
+*.tar.gz
+
 # IDE and local machine state
 .vs/
 *.user

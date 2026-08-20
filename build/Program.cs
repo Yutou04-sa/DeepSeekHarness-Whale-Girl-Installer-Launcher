@@ -6,7 +6,6 @@ using System.Drawing;
 using System.IO;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -46,7 +45,7 @@ internal static class Program
             if (IsPortListening(servicePort))
             {
                 splash.SetStatus("dsh 已在运行");
-                splash.CloseWhenReady(ShowWebAndWarning);
+                splash.CloseWhenReady(OpenStandaloneWeb);
                 return;
             }
 
@@ -71,7 +70,7 @@ internal static class Program
             }
             if (dshBin == null) throw new FileNotFoundException("安装完成后仍未找到 dsh 程序。");
 
-            splash.SetStatus("正在安装端口控制和插件市场...");
+            splash.SetStatus("正在安装启停按钮和插件市场...");
             string profile = EnsureProfile();
             PatchWebBranding(dshBin, profile);
             StartDsh(node, dshBin, profile);
@@ -81,7 +80,7 @@ internal static class Program
             {
                 if (IsPortListening(servicePort))
                 {
-                    splash.CloseWhenReady(ShowWebAndWarning);
+                    splash.CloseWhenReady(OpenStandaloneWeb);
                     return;
                 }
                 Thread.Sleep(1000);
@@ -101,28 +100,26 @@ internal static class Program
         string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh", "profiles", "web");
         Directory.CreateDirectory(profile);
 
-        string plugin = Path.Combine(profile, "node_modules", "dsh-port-control");
-        Directory.CreateDirectory(Path.Combine(plugin, "lib"));
-        WriteResource("dsh-port-control-package.json", Path.Combine(plugin, "package.json"));
-        WriteResource("dsh-port-control-cordis.patch.yml", Path.Combine(plugin, "cordis.patch.yml"));
-        WriteResource("dsh-port-control-index.js", Path.Combine(plugin, "lib", "index.js"));
-        WriteResource("dsh-port-control-readme.md", Path.Combine(plugin, "README.md"));
-
         string packagePath = Path.Combine(profile, "package.json");
         var package = ReadPackage(packagePath);
         package["name"] = "dsh-profile-web";
         package["private"] = true;
 
         Dictionary<string, object> dependencies = GetDictionary(package, "dependencies");
-        dependencies["dsh-port-control"] = "file:./node_modules/dsh-port-control";
+        dependencies.Remove("dsh-port-control");
+        dependencies["dsh-power-button"] = "github:huasheng33991/dsh-power-button";
         dependencies["dshmarket"] = "^1.15.0";
         Dictionary<string, object> dsh = GetDictionary(package, "dsh");
         Dictionary<string, object> profileConfig = GetDictionary(dsh, "profile");
         List<object> bundles = GetList(profileConfig, "bundles");
+        RemoveBundle(bundles, "dsh-port-control");
         AddBundle(bundles, "@deepseek-ai/dsh-base");
         AddBundle(bundles, "@deepseek-ai/dsh-web-app");
-        AddBundle(bundles, "dsh-port-control");
+        AddBundle(bundles, "dsh-power-button");
         AddBundle(bundles, "dshmarket");
+
+        string oldPlugin = Path.Combine(profile, "node_modules", "dsh-port-control");
+        if (Directory.Exists(oldPlugin)) Directory.Delete(oldPlugin, true);
 
         File.WriteAllText(packagePath, new JavaScriptSerializer().Serialize(package), new UTF8Encoding(false));
         string cordisPath = Path.Combine(profile, "cordis.yml");
@@ -230,6 +227,12 @@ internal static class Program
     {
         foreach (object value in bundles) if (String.Equals(value as string, name, StringComparison.Ordinal)) return;
         bundles.Add(name);
+    }
+
+    private static void RemoveBundle(List<object> bundles, string name)
+    {
+        for (int i = bundles.Count - 1; i >= 0; i--)
+            if (String.Equals(bundles[i] as string, name, StringComparison.Ordinal)) bundles.RemoveAt(i);
     }
 
     private static void WriteResource(string resourceName, string target)
@@ -372,7 +375,7 @@ internal static class Program
 
     private static void OpenStandaloneWeb()
     {
-        string url = "http://127.0.0.1:" + servicePort + "/__dsh-control/new-session";
+        string url = "http://127.0.0.1:" + servicePort + "/";
         string[] candidates = {
             "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
             "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -404,20 +407,6 @@ internal static class Program
                       " --window-size=" + width + "," + height +
                       " --window-position=" + left + "," + top;
         Process.Start(new ProcessStartInfo { FileName = browser, Arguments = args, UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(browser) });
-    }
-
-    private static void ShowPortControlWarning()
-    {
-        using (var warning = new PortWarningForm(servicePort))
-        {
-            warning.ShowDialog();
-        }
-    }
-
-    private static void ShowWebAndWarning()
-    {
-        OpenStandaloneWeb();
-        ShowPortControlWarning();
     }
 
     private static string Quote(string value)
@@ -499,59 +488,4 @@ internal sealed class SplashForm : Form
         base.Dispose(disposing);
     }
 
-}
-
-internal sealed class PortWarningForm : Form
-{
-    private static readonly IntPtr HwndTopmost = new IntPtr(-1);
-    private const uint SwpNoSize = 0x0001;
-    private const uint SwpNoMove = 0x0002;
-    private const uint SwpShowWindow = 0x0040;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
-
-    public PortWarningForm(int port)
-    {
-        Text = "鲸鱼娘 · 端口控制提示";
-        ClientSize = new Size(460, 320);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterScreen;
-        TopMost = true;
-        ShowInTaskbar = true;
-        BackColor = Color.White;
-        Shown += delegate { PinToTop(); };
-        Activated += delegate { PinToTop(); };
-
-        var header = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Color.FromArgb(32, 112, 184) };
-        header.Controls.Add(new Label { AutoSize = true, Left = 20, Top = 12, ForeColor = Color.White, Font = new Font("Microsoft YaHei", 16, FontStyle.Bold), Text = "鲸鱼娘 · 端口控制提示" });
-        header.Controls.Add(new Label { AutoSize = true, Left = 22, Top = 39, ForeColor = Color.FromArgb(218, 238, 255), Font = new Font("Microsoft YaHei", 9), Text = "dsh Web 服务已启动" });
-
-        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(22, 16, 22, 14) };
-        var message = new Label
-        {
-            Dock = DockStyle.Fill,
-            ForeColor = Color.FromArgb(45, 55, 62),
-            Font = new Font("Microsoft YaHei", 10),
-            Text = "当前服务端口：" + port + "\r\n\r\n" +
-                   "重启端口：/dsh-restart\r\n" +
-                   "关闭端口：/dsh-stop\r\n" +
-                   "关闭此窗口不会关闭端口。",
-            AutoSize = false
-        };
-        var close = new Button { Text = "知道了", Width = 92, Height = 30, Dock = DockStyle.Bottom, DialogResult = DialogResult.OK, Font = new Font("Microsoft YaHei", 9) };
-        AcceptButton = close;
-        body.Controls.Add(message);
-        body.Controls.Add(close);
-        Controls.Add(body);
-        Controls.Add(header);
-    }
-
-    private void PinToTop()
-    {
-        TopMost = true;
-        if (IsHandleCreated) SetWindowPos(Handle, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpShowWindow);
-    }
 }

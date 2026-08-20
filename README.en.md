@@ -2,9 +2,9 @@
 
 [中文](README.md) | English
 
-This is a pure C# installer and launcher for DeepSeek Harness Web on Windows. It prepares the dsh runtime, installs dsh-power-button and the dshmarket plugin marketplace, starts the Web service, and opens a centered standalone Web app window using Edge, Chrome, or Brave.
+This is a pure C# installer and launcher for DeepSeek Harness Web on Windows. It prepares the dsh runtime, installs dsh-power-button and the dshmarket plugin marketplace, starts the Web service, and opens a centered standalone Web app window using an available Edge, Chrome, Brave, or Chromium installation.
 
-The launcher includes the Whale Girl startup animation and branded icon. It also changes the Web page title to "Whale Girl is ready, let's set sail!". After startup it opens the Web home page without showing the previous port warning window, and it does not clear browser sign-in or other profile settings.
+The launcher includes the Whale Girl startup animation and branded icon. It also changes the Web page title to "Whale Girl is ready, let's set sail!". On first startup it scans local browsers and lets the user choose a default, then remembers that choice. After startup it opens the Web home page without showing the previous port warning window, and it does not clear browser sign-in or other profile settings.
 
 ## Included Source
 

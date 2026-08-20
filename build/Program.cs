@@ -389,18 +389,8 @@ internal static class Program
     private static void OpenStandaloneWeb()
     {
         string url = "http://127.0.0.1:" + servicePort + "/";
-        string[] candidates = {
-            "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-            "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-            "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe"
-        };
-        string browser = null;
-        foreach (string candidate in candidates)
-        {
-            if (File.Exists(candidate)) { browser = candidate; break; }
-        }
+        List<BrowserOption> browsers = DetectBrowsers();
+        string browser = ChooseBrowser(browsers);
         if (browser == null)
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -422,9 +412,127 @@ internal static class Program
         Process.Start(new ProcessStartInfo { FileName = browser, Arguments = args, UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(browser) });
     }
 
+    private static List<BrowserOption> DetectBrowsers()
+    {
+        var result = new List<BrowserOption>();
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        AddBrowser(result, "Microsoft Edge", Path.Combine(programFiles, "Microsoft", "Edge", "Application", "msedge.exe"));
+        AddBrowser(result, "Microsoft Edge", Path.Combine(programFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"));
+        AddBrowser(result, "Microsoft Edge", Path.Combine(localAppData, "Microsoft", "Edge", "Application", "msedge.exe"));
+        AddBrowser(result, "Google Chrome", Path.Combine(programFiles, "Google", "Chrome", "Application", "chrome.exe"));
+        AddBrowser(result, "Google Chrome", Path.Combine(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"));
+        AddBrowser(result, "Google Chrome", Path.Combine(localAppData, "Google", "Chrome", "Application", "chrome.exe"));
+        AddBrowser(result, "Brave", Path.Combine(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"));
+        AddBrowser(result, "Brave", Path.Combine(programFilesX86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"));
+        AddBrowser(result, "Brave", Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"));
+        AddBrowser(result, "Chromium", FindExecutable("chromium.exe"));
+        AddBrowser(result, "Chromium", FindExecutable("chrome.exe"));
+        return result;
+    }
+
+    private static void AddBrowser(List<BrowserOption> browsers, string name, string path)
+    {
+        if (String.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        foreach (BrowserOption existing in browsers)
+            if (String.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase)) return;
+        browsers.Add(new BrowserOption { Name = name, Path = path });
+    }
+
+    private static string ChooseBrowser(List<BrowserOption> browsers)
+    {
+        string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeepSeekHarness", "browser.json");
+        try
+        {
+            if (File.Exists(settingsPath))
+            {
+                var saved = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(settingsPath)) as Dictionary<string, object>;
+                object savedPath;
+                if (saved != null && saved.TryGetValue("path", out savedPath) && savedPath is string && File.Exists((string)savedPath))
+                    return (string)savedPath;
+            }
+        }
+        catch { }
+
+        if (browsers.Count == 0) return null;
+        using (var chooser = new BrowserChoiceForm(browsers))
+        {
+            if (chooser.ShowDialog() == DialogResult.OK && chooser.SelectedPath != null)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(settingsPath));
+                    var saved = new Dictionary<string, object> { { "path", chooser.SelectedPath } };
+                    File.WriteAllText(settingsPath, new JavaScriptSerializer().Serialize(saved), new UTF8Encoding(false));
+                }
+                catch { }
+                return chooser.SelectedPath;
+            }
+        }
+        return browsers[0].Path;
+    }
+
     private static string Quote(string value)
     {
         return "\"" + value.Replace("\"", "\\\"") + "\"";
+    }
+}
+
+internal sealed class BrowserOption
+{
+    public string Name;
+    public string Path;
+}
+
+internal sealed class BrowserChoiceForm : Form
+{
+    public string SelectedPath { get; private set; }
+
+    public BrowserChoiceForm(List<BrowserOption> browsers)
+    {
+        Text = "鲸鱼娘 · 选择 Web 浏览器";
+        ClientSize = new Size(520, 360);
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Color.FromArgb(247, 250, 252);
+
+        var header = new Panel { Dock = DockStyle.Top, Height = 82, BackColor = Color.FromArgb(32, 112, 184) };
+        header.Controls.Add(new Label { AutoSize = true, Left = 24, Top = 14, ForeColor = Color.White, Font = new Font("Microsoft YaHei", 17, FontStyle.Bold), Text = "鲸鱼娘要使用哪个浏览器？" });
+        header.Controls.Add(new Label { AutoSize = true, Left = 26, Top = 48, ForeColor = Color.FromArgb(218, 238, 255), Font = new Font("Microsoft YaHei", 9), Text = "首次启动请选择独立 Web 页面使用的浏览器" });
+
+        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(24, 16, 24, 16) };
+        var choices = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Color.Transparent };
+        foreach (BrowserOption browser in browsers)
+        {
+            var radio = new RadioButton
+            {
+                AutoSize = false,
+                Width = 450,
+                Height = 42,
+                Text = browser.Name + "\r\n" + browser.Path,
+                Tag = browser.Path,
+                Font = new Font("Microsoft YaHei", 10),
+                ForeColor = Color.FromArgb(38, 50, 56),
+                Padding = new Padding(4, 2, 0, 2)
+            };
+            radio.CheckedChanged += delegate(object sender, EventArgs args)
+            {
+                var selected = sender as RadioButton;
+                if (selected != null && selected.Checked) SelectedPath = selected.Tag as string;
+            };
+            choices.Controls.Add(radio);
+        }
+        if (choices.Controls.Count > 0) ((RadioButton)choices.Controls[0]).Checked = true;
+
+        var use = new Button { Text = "使用此浏览器", Width = 120, Height = 32, Dock = DockStyle.Bottom, DialogResult = DialogResult.OK, Font = new Font("Microsoft YaHei", 9) };
+        AcceptButton = use;
+        body.Controls.Add(choices);
+        body.Controls.Add(use);
+        Controls.Add(body);
+        Controls.Add(header);
     }
 }
 

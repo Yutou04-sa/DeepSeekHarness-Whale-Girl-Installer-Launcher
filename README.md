@@ -2,9 +2,9 @@
 
 中文 | [English](README.en.md)
 
-这是一个面向 Windows 的纯 C# DeepSeek Harness Web 安装启动器。它会自动准备 dsh 运行环境、安装 dsh-power-button 启停插件和 dshmarket 插件市场、启动 Web 服务，并使用 Edge、Chrome 或 Brave 打开居中的独立 Web 应用窗口。
+这是一个面向 Windows 的纯 C# DeepSeek Harness Web 安装启动器。它会自动准备 dsh 运行环境、安装 dsh-power-button 启停插件和 dshmarket 插件市场、启动 Web 服务，并使用本机可用的 Edge、Chrome、Brave 或 Chromium 打开居中的独立 Web 应用窗口。
 
-启动器保留鲸鱼娘启动动画和品牌图标，并会将 Web 页面标题设置为“鲸鱼娘已就位，准备出发！”。Web 服务启动后直接打开首页，不再显示端口警告窗口，也不会清除登录信息和其他浏览器配置。
+启动器保留鲸鱼娘启动动画和品牌图标，并会将 Web 页面标题设置为“鲸鱼娘已就位，准备出发！”。首次启动会扫描本机浏览器并让用户选择默认浏览器，之后记住选择。Web 服务启动后直接打开首页，不再显示端口警告窗口，也不会清除登录信息和其他浏览器配置。
 
 ### 核心源码
 

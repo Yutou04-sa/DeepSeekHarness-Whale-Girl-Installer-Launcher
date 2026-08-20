@@ -110,7 +110,11 @@ https://github.com/huasheng33991/dsh-power-button
 
 ### 插件市场（dshmarket）
 
-自动安装最新稳定版 `dshmarket`（`latest`），可在 DeepSeek Harness Web 中浏览和安装社区插件。
+自动安装最新稳定版 ，可在 DeepSeek Harness Web 中浏览和安装社区插件。
+
+插件来自独立仓库，首次运行通过 GitHub 安装：
+
+https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
 
 ---
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
@@ -42,7 +43,7 @@ internal static class Program
     {
         try
         {
-            if (IsPortListening(servicePort))
+            if (IsDshWebReady(servicePort))
             {
                 splash.SetStatus("dsh 已在运行");
                 splash.CloseWhenReady(OpenStandaloneWeb);
@@ -78,7 +79,7 @@ internal static class Program
             splash.SetStatus("正在启动 dsh Web 服务...");
             for (int i = 0; i < 180; i++)
             {
-                if (IsPortListening(servicePort))
+                if (IsDshWebReady(servicePort))
                 {
                     splash.CloseWhenReady(OpenStandaloneWeb);
                     return;
@@ -359,17 +360,24 @@ internal static class Program
         }
     }
 
-    private static bool IsPortListening(int port)
+    private static bool IsDshWebReady(int port)
     {
-        using (var client = new TcpClient())
+        try
         {
-            try
-            {
-                IAsyncResult result = client.BeginConnect("127.0.0.1", port, null, null);
-                return result.AsyncWaitHandle.WaitOne(100);
-            }
-            catch { return false; }
+            var request = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + port + "/");
+            request.Method = "GET";
+            request.Timeout = 1000;
+            request.ReadWriteTimeout = 1000;
+            using (var response = (HttpWebResponse)request.GetResponse())
+                return ((int)response.StatusCode) < 500;
         }
+        catch (WebException error)
+        {
+            var response = error.Response as HttpWebResponse;
+            if (response == null) return false;
+            using (response) return ((int)response.StatusCode) < 500;
+        }
+        catch { return false; }
     }
 
     private static void OpenStandaloneWeb()

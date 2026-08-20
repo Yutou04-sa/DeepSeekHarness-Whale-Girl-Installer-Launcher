@@ -21,7 +21,7 @@ The compiled `DeepSeekHarness.exe`, dsh configuration, browser profiles, logs, a
 - Windows 10/11
 - .NET Framework 4.x C# compiler
 - Node.js
-- pnpm (used by the launcher at runtime)
+- npm (the launcher prefers pnpm and falls back to a temporary npx pnpm invocation)
 
 Run this command from the repository root in PowerShell:
 

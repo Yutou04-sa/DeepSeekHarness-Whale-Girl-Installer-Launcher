@@ -21,7 +21,7 @@
 - Windows 10/11
 - .NET Framework 4.x C# 编译器
 - Node.js
-- pnpm（启动器运行时使用）
+- npm（启动器会优先使用 pnpm；未安装 pnpm 时自动通过 npx 临时调用）
 
 在仓库根目录打开 PowerShell，执行下面的构建命令：
 

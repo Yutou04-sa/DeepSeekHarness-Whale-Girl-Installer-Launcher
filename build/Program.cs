@@ -106,20 +106,15 @@ internal static class Program
         package["private"] = true;
 
         Dictionary<string, object> dependencies = GetDictionary(package, "dependencies");
-        dependencies.Remove("dsh-port-control");
         dependencies["dsh-power-button"] = "github:huasheng33991/dsh-power-button";
         dependencies["dshmarket"] = "^1.15.0";
         Dictionary<string, object> dsh = GetDictionary(package, "dsh");
         Dictionary<string, object> profileConfig = GetDictionary(dsh, "profile");
         List<object> bundles = GetList(profileConfig, "bundles");
-        RemoveBundle(bundles, "dsh-port-control");
         AddBundle(bundles, "@deepseek-ai/dsh-base");
         AddBundle(bundles, "@deepseek-ai/dsh-web-app");
         AddBundle(bundles, "dsh-power-button");
         AddBundle(bundles, "dshmarket");
-
-        string oldPlugin = Path.Combine(profile, "node_modules", "dsh-port-control");
-        if (Directory.Exists(oldPlugin)) Directory.Delete(oldPlugin, true);
 
         File.WriteAllText(packagePath, new JavaScriptSerializer().Serialize(package), new UTF8Encoding(false));
         string cordisPath = Path.Combine(profile, "cordis.yml");
@@ -127,7 +122,17 @@ internal static class Program
         string patchPath = Path.Combine(profile, "cordis.patch.yml");
         if (!File.Exists(patchPath)) File.WriteAllText(patchPath, "[]\r\n", new UTF8Encoding(false));
         string pnpm = FindExecutable("pnpm.cmd");
-        if (pnpm != null) RunAndWait(pnpm, "install --config.minimum-release-age=0 --config.confirmModulesPurge=false --no-frozen-lockfile", profile);
+        string pnpmArguments = "install --config.minimum-release-age=0 --config.confirmModulesPurge=false --no-frozen-lockfile";
+        if (pnpm == null)
+        {
+            string npx = FindExecutable("npx.cmd");
+            if (npx != null)
+            {
+                pnpm = npx;
+                pnpmArguments = "--yes pnpm " + pnpmArguments;
+            }
+        }
+        if (pnpm != null) RunAndWait(pnpm, pnpmArguments, profile);
         return profile;
     }
 
@@ -227,12 +232,6 @@ internal static class Program
     {
         foreach (object value in bundles) if (String.Equals(value as string, name, StringComparison.Ordinal)) return;
         bundles.Add(name);
-    }
-
-    private static void RemoveBundle(List<object> bundles, string name)
-    {
-        for (int i = bundles.Count - 1; i >= 0; i--)
-            if (String.Equals(bundles[i] as string, name, StringComparison.Ordinal)) bundles.RemoveAt(i);
     }
 
     private static void WriteResource(string resourceName, string target)

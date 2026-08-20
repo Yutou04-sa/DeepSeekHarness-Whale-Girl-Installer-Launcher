@@ -9,7 +9,7 @@
 ### 核心源码
 
 - `build/Program.cs`：WinForms 启动器源码。
-- `dsh-port-control/`：内置端口控制插件，提供 `/dsh-stop`、`/dsh-restart` 和新会话入口。
+- `dsh-port-control/`：启动器核心插件，提供 `/dsh-stop`、`/dsh-restart` 和新会话入口；误删后重新运行启动器会自动恢复。
 - `dshmarket`：启动时从 npm 自动安装的可视化插件市场（`^1.15.0`）。
 - `download.gif`：鲸鱼娘启动动画。
 - `deepseek-harness.ico`：启动器图标。

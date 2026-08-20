@@ -1,6 +1,7 @@
 {
   "name": "dsh-port-control",
   "version": "0.1.1",
+  "description": "启动器核心组件：查看 dsh 服务端口，快速停止或重启服务，并打开独立 Web 页面。请勿卸载。",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

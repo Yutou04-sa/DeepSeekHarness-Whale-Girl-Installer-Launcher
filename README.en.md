@@ -9,7 +9,7 @@ The launcher includes the Whale Girl startup animation and branded icon. It also
 ## Included Source
 
 - `build/Program.cs`: WinForms launcher source.
-- `dsh-port-control/`: bundled port-control plugin providing `/dsh-stop`, `/dsh-restart`, and the fresh-session route.
+- `dsh-port-control/`: launcher core plugin providing `/dsh-stop`, `/dsh-restart`, and the fresh-session route. Running the launcher restores it automatically if it is removed by mistake.
 - `dshmarket`: the visual plugin marketplace installed from npm at startup (`^1.15.0`).
 - `download.gif`: Whale Girl startup animation.
 - `deepseek-harness.ico`: launcher icon.

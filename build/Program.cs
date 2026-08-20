@@ -106,6 +106,7 @@ internal static class Program
         WriteResource("dsh-port-control-package.json", Path.Combine(plugin, "package.json"));
         WriteResource("dsh-port-control-cordis.patch.yml", Path.Combine(plugin, "cordis.patch.yml"));
         WriteResource("dsh-port-control-index.js", Path.Combine(plugin, "lib", "index.js"));
+        WriteResource("dsh-port-control-readme.md", Path.Combine(plugin, "README.md"));
 
         string packagePath = Path.Combine(profile, "package.json");
         var package = ReadPackage(packagePath);

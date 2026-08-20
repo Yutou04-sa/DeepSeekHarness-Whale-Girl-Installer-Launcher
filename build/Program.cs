@@ -23,7 +23,7 @@ using System.Text.RegularExpressions;
 internal static class Program
 {
     private const int DefaultPort = 3080;
-    private const string DshPackage = "@deepseek-ai/dsh@0.1.0-rc.7";
+    private const string DshPackage = "@deepseek-ai/dsh";
     private static Process dshProcess;
     private static int servicePort = DefaultPort;
 

@@ -11,20 +11,65 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
 using System.Text.RegularExpressions;
+using System.IO.Compression;
+using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("DeepSeek Harness")]
 [assembly: AssemblyDescription("DeepSeek Harness launcher")]
 [assembly: AssemblyProduct("DeepSeek Harness")]
 [assembly: AssemblyCompany("DeepSeek")]
-[assembly: AssemblyVersion("2.0.1.0")]
-[assembly: AssemblyFileVersion("2.0.1.0")]
+[assembly: AssemblyVersion("3.0.0.0")]
+[assembly: AssemblyFileVersion("3.0.0.0")]
 
 internal static class Program
 {
     private const int DefaultPort = 3080;
     private const string DshPackage = "@deepseek-ai/dsh";
+    private const int MaxLogLines = 500;
     private static Process dshProcess;
     private static int servicePort = DefaultPort;
+    private static readonly object logLock = new object();
+    private static readonly string launcherLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dsh.log");
+
+    private static void Log(string message)
+    {
+        try
+        {
+            lock (logLock)
+            {
+                File.AppendAllText(launcherLogPath, "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + message + Environment.NewLine, new UTF8Encoding(false));
+                TrimLogIfNeeded();
+            }
+        }
+        catch { }
+    }
+
+    private static void TrimLogIfNeeded()
+    {
+        try
+        {
+            string[] lines = File.ReadAllLines(launcherLogPath);
+            if (lines.Length <= MaxLogLines) return;
+            string[] tail = new string[MaxLogLines];
+            Array.Copy(lines, lines.Length - MaxLogLines, tail, 0, MaxLogLines);
+            File.WriteAllLines(launcherLogPath, tail, new UTF8Encoding(false));
+        }
+        catch { }
+    }
+
+    private static void ShowMessageBox(SplashForm splash, string message, MessageBoxIcon icon)
+    {
+        if (splash == null || splash.IsDisposed) return;
+        if (splash.InvokeRequired)
+        {
+            try { splash.Invoke(new Action(delegate { MessageBox.Show(message, "DeepSeek Harness", MessageBoxButtons.OK, icon); })); }
+            catch { }
+        }
+        else
+        {
+            MessageBox.Show(message, "DeepSeek Harness", MessageBoxButtons.OK, icon);
+        }
+    }
 
     [STAThread]
     private static void Main()
@@ -42,31 +87,44 @@ internal static class Program
     {
         try
         {
+            Log("========== DeepSeek Harness 启动器开始启动 ==========");
+            Log("启动器日志文件: " + launcherLogPath);
+
             if (IsDshWebReady(servicePort))
             {
+                Log("检测到 dsh Web 服务已在运行 (端口 " + servicePort + ")，直接打开独立窗口");
                 splash.SetStatus("dsh 已在运行");
                 splash.CloseWhenReady(OpenStandaloneWeb);
                 return;
             }
+            Log("dsh Web 服务未在运行 (端口 " + servicePort + ")，开始完整启动流程");
 
             string node = FindExecutable("node.exe", "C:\\Program Files\\nodejs\\node.exe", "C:\\Program Files (x86)\\nodejs\\node.exe");
             string npm = FindExecutable("npm.cmd", "C:\\Program Files\\nodejs\\npm.cmd", "C:\\Program Files (x86)\\nodejs\\npm.cmd");
+            Log("检查 Node.js: node.exe = " + (node ?? "(未找到)"));
+            Log("检查 npm: npm.cmd = " + (npm ?? "(未找到)"));
             if (node == null || npm == null)
             {
+                Log("[警告] 未检测到 Node.js，提示用户安装并打开下载页");
                 splash.SetStatus("需要安装 Node.js");
-                MessageBox.Show("未检测到 Node.js，请先安装 Node.js。", "DeepSeek Harness", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowMessageBox(splash, "未检测到 Node.js，请先安装 Node.js。", MessageBoxIcon.Information);
                 Process.Start(new ProcessStartInfo("https://nodejs.org/en/download") { UseShellExecute = true });
                 splash.CloseWhenReady();
                 return;
             }
 
             string dshBin = FindDshEntry(npm);
+            Log("查找 dsh 入口: " + (dshBin ?? "(未找到)"));
             if (dshBin == null)
             {
+                Log("未找到 dsh，执行: npm install --global " + DshPackage + " --no-fund --no-audit");
                 splash.SetStatus("正在安装 DeepSeek dsh...");
-                if (RunAndWait(npm, "install --global " + DshPackage + " --no-fund --no-audit") != 0)
+                int dshExit = RunAndWait(npm, "install --global " + DshPackage + " --no-fund --no-audit");
+                Log("dsh 安装命令退出码: " + dshExit);
+                if (dshExit != 0)
                     throw new InvalidOperationException("DeepSeek dsh 安装失败。");
                 dshBin = FindDshEntry(npm);
+                Log("安装后重新查找 dsh 入口: " + (dshBin ?? "(未找到)"));
             }
             if (dshBin == null) throw new FileNotFoundException("安装完成后仍未找到 dsh 程序。");
 
@@ -76,23 +134,31 @@ internal static class Program
             StartDsh(node, dshBin, profile);
 
             splash.SetStatus("正在启动 dsh Web 服务...");
+            Log("等待 dsh Web 服务就绪 (最多 180 秒)...");
             for (int i = 0; i < 180; i++)
             {
                 if (IsDshWebReady(servicePort))
                 {
+                    Log("Web 服务已就绪: http://127.0.0.1:" + servicePort + "/ (约 " + i + " 秒)");
                     splash.CloseWhenReady(OpenStandaloneWeb);
                     return;
                 }
                 if (dshProcess != null && dshProcess.HasExited)
-                    throw new InvalidOperationException("dsh 进程已退出，退出码：" + dshProcess.ExitCode + "。请检查用户目录中的 dsh-web.err.log。");
+                {
+                    Log("[错误] dsh 进程已退出，退出码: " + dshProcess.ExitCode);
+                    throw new InvalidOperationException("dsh 进程已退出，退出码：" + dshProcess.ExitCode + "。请检查应用目录中的 dsh.log。");
+                }
                 Thread.Sleep(1000);
             }
-            throw new TimeoutException("dsh Web 服务在 180 秒内未启动，请检查用户目录中的 dsh-web.err.log。");
+            Log("[错误] dsh Web 服务 180 秒内未启动");
+            throw new TimeoutException("dsh Web 服务在 180 秒内未启动，请检查应用目录中的 dsh.log。");
         }
         catch (Exception error)
         {
+            Log("[错误] 启动失败: " + error.GetType().Name + " - " + error.Message);
+            Log("[错误] 异常堆栈: " + error.StackTrace);
             splash.SetStatus("启动失败");
-            MessageBox.Show(error.Message, "DeepSeek Harness", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowMessageBox(splash, error.Message, MessageBoxIcon.Error);
             splash.CloseWhenReady();
         }
     }
@@ -101,6 +167,18 @@ internal static class Program
     {
         string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh", "profiles", "web");
         Directory.CreateDirectory(profile);
+        Log("准备 profile 目录: " + profile);
+
+        string powerButtonDir = Path.Combine(profile, "vendor", "dsh-power-button");
+        if (!Directory.Exists(powerButtonDir))
+        {
+            Log("内置解压 dsh-power-button 插件到: " + powerButtonDir);
+            ExtractEmbeddedZip("dsh-power-button.zip", powerButtonDir);
+        }
+        else
+        {
+            Log("dsh-power-button 插件已内置存在，跳过解压");
+        }
 
         string packagePath = Path.Combine(profile, "package.json");
         var package = ReadPackage(packagePath);
@@ -108,8 +186,9 @@ internal static class Program
         package["private"] = true;
 
         Dictionary<string, object> dependencies = GetDictionary(package, "dependencies");
-        dependencies["dsh-power-button"] = "github:huasheng33991/dsh-power-button";
+        dependencies["dsh-power-button"] = "file:./vendor/dsh-power-button";
         dependencies["dshmarket"] = "latest";
+        Log("声明依赖: dsh-power-button=file:./vendor/dsh-power-button (内置), dshmarket=latest");
         Dictionary<string, object> dsh = GetDictionary(package, "dsh");
         Dictionary<string, object> profileConfig = GetDictionary(dsh, "profile");
         List<object> bundles = GetList(profileConfig, "bundles");
@@ -117,30 +196,70 @@ internal static class Program
         AddBundle(bundles, "@deepseek-ai/dsh-web-app");
         AddBundle(bundles, "dsh-power-button");
         AddBundle(bundles, "dshmarket");
+        Log("声明 bundles: " + string.Join(", ", bundles.ConvertAll(b => b == null ? "" : b.ToString()).ToArray()));
 
         File.WriteAllText(packagePath, new JavaScriptSerializer().Serialize(package), new UTF8Encoding(false));
+        Log("已写入 package.json");
         string cordisPath = Path.Combine(profile, "cordis.yml");
-        if (!File.Exists(cordisPath)) File.WriteAllText(cordisPath, "[]\r\n", new UTF8Encoding(false));
+        if (!File.Exists(cordisPath)) { File.WriteAllText(cordisPath, "[]\r\n", new UTF8Encoding(false)); Log("已创建 cordis.yml (空)"); }
         string patchPath = Path.Combine(profile, "cordis.patch.yml");
-        if (!File.Exists(patchPath)) File.WriteAllText(patchPath, "[]\r\n", new UTF8Encoding(false));
+        if (!File.Exists(patchPath)) { File.WriteAllText(patchPath, "[]\r\n", new UTF8Encoding(false)); Log("已创建 cordis.patch.yml (空)"); }
         string pnpm = FindExecutable("pnpm.cmd");
         string pnpmArguments = "install --config.minimum-release-age=0 --config.confirmModulesPurge=false --no-frozen-lockfile";
+        Log("检查 pnpm: " + (pnpm ?? "(未找到)"));
         if (pnpm == null)
         {
             string npx = FindExecutable("npx.cmd");
+            Log("pnpm 未找到，检查 npx: " + (npx ?? "(未找到)"));
             if (npx != null)
             {
                 pnpm = npx;
                 pnpmArguments = "--yes pnpm " + pnpmArguments;
+                Log("将使用 npx pnpm 回退方案");
             }
         }
-        if (pnpm == null) throw new InvalidOperationException("未找到 pnpm 或 npx，无法安装 dsh 插件依赖。");
+        if (pnpm == null) { Log("[错误] 未找到 pnpm 或 npx"); throw new InvalidOperationException("未找到 pnpm 或 npx，无法安装 dsh 插件依赖。"); }
+        Log("执行安装: " + pnpm + " " + pnpmArguments + " (工作目录: " + profile + ")");
         int installExitCode = RunAndWait(pnpm, pnpmArguments, profile);
+        Log("插件依赖安装退出码: " + installExitCode);
+        if (installExitCode != 0)
+        {
+            Log("官方 npm registry 安装失败，尝试国内镜像 npmmirror...");
+            installExitCode = RunAndWait(pnpm, pnpmArguments + " --registry=https://registry.npmmirror.com", profile);
+            Log("国内镜像安装退出码: " + installExitCode);
+        }
         if (installExitCode != 0)
             throw new InvalidOperationException("dsh 插件依赖安装失败，退出码：" + installExitCode + "。请检查网络连接和 npm 日志。");
+
+        Log("检查插件安装结果 (目录: " + Path.Combine(profile, "node_modules") + "):");
+        Log("  dsh-power-button: " + (Directory.Exists(Path.Combine(profile, "node_modules", "dsh-power-button")) ? "已安装" : "未找到"));
+        Log("  dshmarket: " + (Directory.Exists(Path.Combine(profile, "node_modules", "dshmarket")) ? "已安装" : "未找到"));
         if (!Directory.Exists(Path.Combine(profile, "node_modules", "dsh-power-button")))
             throw new InvalidOperationException("dsh-power-button 安装后未找到，请重新启动安装器。");
         return profile;
+    }
+
+    private static void ExtractEmbeddedZip(string resourceName, string targetDir)
+    {
+        using (Stream source = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
+        {
+            if (source == null) throw new FileNotFoundException("Missing embedded resource: " + resourceName);
+            Directory.CreateDirectory(targetDir);
+            using (var zip = new ZipArchive(source, ZipArchiveMode.Read))
+            {
+                foreach (var entry in zip.Entries)
+                {
+                    string relativePath = entry.FullName.Replace('/', '\\');
+                    if (relativePath.EndsWith("\\")) { Directory.CreateDirectory(Path.Combine(targetDir, relativePath)); continue; }
+                    string destPath = Path.Combine(targetDir, relativePath);
+                    string dir = Path.GetDirectoryName(destPath);
+                    if (!String.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    using (Stream entryStream = entry.Open())
+                    using (FileStream output = File.Create(destPath))
+                        entryStream.CopyTo(output);
+                }
+            }
+        }
     }
 
     private static void PatchWebBranding(string dshBin, string profile)
@@ -243,8 +362,11 @@ internal static class Program
 
     private static void StartDsh(string node, string dshBin, string profile)
     {
-        string log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "dsh-web.log");
-        string errorLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "dsh-web.err.log");
+        string log = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dsh.log");
+        string errorLog = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dsh.log");
+        Log("启动 dsh 进程: " + node + " " + Quote(dshBin) + " web");
+        Log("  工作目录: " + profile);
+        Log("  dsh 输出统一写入: " + log);
         var start = new ProcessStartInfo
         {
             FileName = node,
@@ -253,9 +375,12 @@ internal static class Program
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         dshProcess = Process.Start(start);
+        Log("dsh 进程已启动 (PID: " + dshProcess.Id + ")");
         dshProcess.OutputDataReceived += delegate(object sender, DataReceivedEventArgs args) { HandleOutput(log, args.Data); };
         dshProcess.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs args) { AppendLog(errorLog, args.Data); };
         dshProcess.BeginOutputReadLine();
@@ -264,7 +389,16 @@ internal static class Program
 
     private static void AppendLog(string path, string line)
     {
-        if (!String.IsNullOrEmpty(line)) File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
+        if (String.IsNullOrEmpty(line)) return;
+        try
+        {
+            lock (logLock)
+            {
+                File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
+                TrimLogIfNeeded();
+            }
+        }
+        catch { }
     }
 
     private static void HandleOutput(string path, string line)
@@ -372,7 +506,11 @@ internal static class Program
     {
         using (Process process = Process.Start(BuildStartInfo(fileName, arguments, workingDirectory, false)))
         {
-            process.WaitForExit();
+            if (!process.WaitForExit(600000))
+            {
+                try { process.Kill(); } catch { }
+                return -1;
+            }
             return process.ExitCode;
         }
     }
@@ -411,12 +549,17 @@ internal static class Program
     {
         string url = "http://127.0.0.1:" + servicePort + "/";
         List<BrowserOption> browsers = DetectBrowsers();
+        string browserNames = "";
+        foreach (BrowserOption b in browsers) browserNames = (browserNames.Length == 0 ? "" : browserNames + ", ") + b.Name;
+        Log("检测到浏览器 (" + browsers.Count + " 个): " + (browserNames.Length == 0 ? "(无)" : browserNames));
         string browser = ChooseBrowser(browsers);
         if (browser == null)
         {
+            Log("未检测到 Chromium 浏览器，使用系统默认浏览器打开: " + url);
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             return;
         }
+        Log("使用浏览器: " + browser);
 
         string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeepSeekHarness", "BrowserProfile");
         Directory.CreateDirectory(profile);
@@ -497,6 +640,7 @@ internal sealed class BrowserChoiceForm : Form
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(247, 250, 252);
+        TopMost = true;
 
         var header = new Panel { Dock = DockStyle.Top, Height = 82, BackColor = Color.FromArgb(32, 112, 184) };
         header.Controls.Add(new Label { AutoSize = true, Left = 24, Top = 14, ForeColor = Color.White, Font = new Font("Microsoft YaHei", 17, FontStyle.Bold), Text = "鲸鱼娘要使用哪个浏览器？" });
@@ -533,6 +677,44 @@ internal sealed class BrowserChoiceForm : Form
         Controls.Add(body);
         Controls.Add(header);
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
+    private System.Windows.Forms.Timer topmostTimer;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams cp = base.CreateParams;
+            cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST
+            return cp;
+        }
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        Activate();
+        topmostTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        topmostTimer.Tick += delegate
+        {
+            if (IsDisposed) { try { topmostTimer.Stop(); topmostTimer.Dispose(); } catch { } return; }
+            SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        };
+        topmostTimer.Start();
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        if (topmostTimer != null) { try { topmostTimer.Stop(); topmostTimer.Dispose(); } catch { } }
+        base.OnFormClosed(e);
+    }
 }
 
 internal sealed class SplashForm : Form
@@ -547,6 +729,7 @@ internal sealed class SplashForm : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(247, 250, 252);
+        TopMost = true;
 
         var header = new Panel { Dock = DockStyle.Top, Height = 76, BackColor = Color.FromArgb(32, 112, 184) };
         header.Controls.Add(new Label { AutoSize = true, Left = 24, Top = 13, ForeColor = Color.White, Font = new Font("Microsoft YaHei", 18, FontStyle.Bold), Text = "鲸鱼娘启动器" });
@@ -600,6 +783,18 @@ internal sealed class SplashForm : Form
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         Close();
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_NCHITTEST = 0x84;
+        const int HTCAPTION = 0x2;
+        if (m.Msg == WM_NCHITTEST)
+        {
+            m.Result = (IntPtr)HTCAPTION;
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     protected override void Dispose(bool disposing)

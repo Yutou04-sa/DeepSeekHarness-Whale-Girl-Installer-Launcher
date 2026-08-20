@@ -19,7 +19,7 @@ DeepSeek Harness Web 的 Windows 免安装启动器：**下载即用、无需管
 | 🖥️ 浏览器选择 | 每次启动扫描 Edge / Chrome / Brave / Chromium 供你选择 |
 | 🪟 独立 Web 窗口 | 居中窗口打开，使用独立浏览器配置目录 |
 | 🔐 不动浏览器数据 | 不主动清除登录信息及其他浏览器配置 |
-| 📝 日志记录 | 运行日志与错误日志写入用户目录，方便排查 |
+| 📝 日志记录 | 全流程日志写入应用目录（dsh.log），方便排查 |
 
 ---
 
@@ -97,9 +97,8 @@ DeepSeek Harness Web 的 Windows 免安装启动器：**下载即用、无需管
 - **辅助按钮**：仅停止当前 dsh 服务并释放端口（`dsh-stop`）
 - **状态点**：显示服务在线、离线或重启中
 
-插件来自独立仓库，首次运行通过 GitHub 安装：
-
-https://github.com/huasheng33991/dsh-power-button
+- **原仓库**：https://github.com/huasheng33991/dsh-power-button
+- **安装方式**：**内置**——插件源码已打包进启动器，运行时自动解压到 profile，**无需访问 GitHub**
 
 ### 服务管理
 
@@ -110,7 +109,10 @@ https://github.com/huasheng33991/dsh-power-button
 
 ### 插件市场（dshmarket）
 
-自动安装最新稳定版 `dshmarket`（`latest`），可在 DeepSeek Harness Web 中浏览和安装社区插件。
+可在 DeepSeek Harness Web 中浏览和安装社区插件。
+
+- **原仓库**：https://github.com/dsh-market/dsh-market
+- **安装方式**：npm 安装最新稳定版 `latest`；官方源失败时自动切换国内镜像 `npmmirror`
 
 ---
 
@@ -119,8 +121,7 @@ https://github.com/huasheng33991/dsh-power-button
 | 内容 | 位置 |
 | --- | --- |
 | dsh 用户 profile（插件、配置） | `%USERPROFILE%\.dsh\profiles\web` |
-| 运行日志（标准输出） | `%USERPROFILE%\dsh-web.log` |
-| 错误日志 | `%USERPROFILE%\dsh-web.err.log` |
+| 全部日志（启动器 + dsh 输出） | 应用目录下的 `dsh.log` |
 | 独立浏览器配置目录 | `%LOCALAPPDATA%\DeepSeekHarness\BrowserProfile` |
 | 服务端口 | 默认 `3080`（以 dsh 实际输出为准） |
 
@@ -139,9 +140,9 @@ https://nodejs.org/en/download
 ### 首次运行要下载什么？
 
 - `@deepseek-ai/dsh`（DeepSeek Harness 本体）
-- dsh profile 依赖（`dsh-power-button`、`dshmarket`、`dsh-base`、`dsh-web-app`）
+- `dshmarket` 及 dsh profile 依赖（`dshmarket`、`dsh-base`、`dsh-web-app`）—— `dsh-power-button` 已内置，无需下载
 
-均通过 npm 从网络安装，请保持网络畅通；如安装缓慢或失败，可考虑配置 npm 镜像源后重试。
+均通过 npm 从网络安装，请保持网络畅通；如安装缓慢或失败，启动器会自动切换国内镜像 `npmmirror` 重试。
 
 ### 为什么启动器优先用 pnpm？
 
@@ -167,10 +168,9 @@ https://nodejs.org/en/download
 
 ## 🛠️ 故障排查
 
-启动器启动失败时会在界面弹出明确错误信息，同时将详细日志写入：
+启动器启动失败时会在界面弹出明确错误信息，同时将详细日志写入应用目录（exe 所在目录）：
 
-- `%USERPROFILE%\dsh-web.log` —— dsh 标准输出
-- `%USERPROFILE%\dsh-web.err.log` —— dsh 错误输出
+- `dsh.log` —— 启动器全流程 + dsh 标准输出 + 错误输出（统一日志）
 
 常见错误与处理：
 
@@ -180,12 +180,12 @@ https://nodejs.org/en/download
 | DeepSeek dsh 安装失败 | 网络问题 / npm 源不可用 | 检查网络，或配置 npm 镜像后重试 |
 | dsh 插件依赖安装失败（退出码 N） | 网络问题 / pnpm 不可用 | 检查网络与 npm 日志后重试 |
 | dsh-power-button 安装后未找到 | 插件安装不完整 | 重新运行启动器 |
-| dsh 进程已退出，退出码 N | dsh 运行时错误 | 查看 `dsh-web.err.log` |
+| dsh 进程已退出，退出码 N | dsh 运行时错误 | 查看 `dsh.log` |
 | dsh Web 服务在 180 秒内未启动 | 启动缓慢 / 端口被占用 | 查看日志，稍后重试 |
 | 未找到任何浏览器 | 系统中没有 Chromium 系浏览器 | 安装 Edge / Chrome / Brave 后重试 |
 
 > 提示：查看日志可用记事本，或 PowerShell 命令
-> `Get-Content "$env:USERPROFILE\dsh-web.err.log" -Tail 50`。
+> `Get-Content ".\dsh.log" -Tail 50`。
 
 ---
 
@@ -198,9 +198,10 @@ DeepSeekHarness-Whale-Girl-Installer-Launcher/
 ├── build/
 │   └── Program.cs          # WinForms 启动器核心源码（全部功能）
 ├── DeepSeekHarness.exe     # 启动器主程序（免安装，双击运行）
-├── DeepSeekHarness-Whale-Girl-Launcher-v2.0.0.zip  # 发布压缩包
+├── DeepSeekHarness-Whale-Girl-Launcher-v3.0.0.zip  # 发布压缩包
 ├── deepseek-harness.ico    # 启动器图标（编译时嵌入）
 ├── download.gif            # 鲸鱼娘启动动画（编译时嵌入为资源）
+├── dsh-power-button.zip    # 内置启停插件（编译时嵌入）
 ├── startup-preview.png     # 启动界面预览图（文档用）
 ├── LICENSE                 # MIT 许可证
 ├── README.md               # 中文说明
@@ -222,7 +223,9 @@ DeepSeekHarness-Whale-Girl-Installer-Launcher/
   /r:System.Drawing.dll `
   /r:System.Windows.Forms.dll `
   /r:System.Web.Extensions.dll `
+  /r:System.IO.Compression.dll `
   /resource:download.gif,download.gif `
+  /resource:dsh-power-button.zip,dsh-power-button.zip `
   /out:DeepSeekHarness.exe `
   build\Program.cs
 ```
@@ -233,7 +236,7 @@ DeepSeekHarness-Whale-Girl-Installer-Launcher/
 2. 打包为 `DeepSeekHarness-Whale-Girl-Launcher-vX.Y.Z.zip`
 3. 发布到 GitHub Releases（推荐）或直接分发 zip / exe
 
-> 提示：`Program.cs` 中的 `AssemblyVersion` / `AssemblyFileVersion` 目前为 `2.0.0.0`，发布新版本时记得同步更新版本号。
+> 提示：`Program.cs` 中的 `AssemblyVersion` / `AssemblyFileVersion` 目前为 `3.0.0.0`，发布新版本时记得同步更新版本号。
 
 ### Roadmap
 

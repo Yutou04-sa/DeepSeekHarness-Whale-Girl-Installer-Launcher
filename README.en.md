@@ -21,7 +21,7 @@ It prepares the DeepSeek Harness (`dsh`) runtime, installs the `dsh-power-button
 | 🖥️ Browser selection | Scans Edge / Chrome / Brave / Chromium on every launch |
 | 🪟 Standalone Web window | Centered window using an isolated browser profile |
 | 🔐 Keeps browser data intact | Never clears sign-in or other browser settings |
-| 📝 Logging | Runtime and error logs written to your user directory |
+| 📝 Logging | Full-flow logs written to the app directory (dsh.log) |
 
 ---
 
@@ -99,9 +99,8 @@ The launcher automatically installs the power-button plugin, which shows a float
 - **Secondary button**: stops the current dsh service only and releases the port (`dsh-stop`)
 - **Status dot**: shows whether the service is online, offline, or restarting
 
-The plugin comes from a separate repository and is installed from GitHub on first run:
-
-https://github.com/huasheng33991/dsh-power-button
+- **Source repo**: https://github.com/huasheng33991/dsh-power-button
+- **Install method**: **bundled** — the plugin source is packaged into the launcher and extracted to the profile at runtime, **no GitHub access needed**
 
 ### Service management
 
@@ -112,7 +111,10 @@ Besides the floating button, starting the service can also be handled by the lau
 
 ### Plugin marketplace (dshmarket)
 
-Installs the latest stable `dshmarket` (`latest`) automatically, letting you browse and install community plugins from the DeepSeek Harness Web UI.
+Lets you browse and install community plugins from the DeepSeek Harness Web UI.
+
+- **Source repo**: https://github.com/dsh-market/dsh-market
+- **Install method**: installed from npm at the latest stable version `latest`; falls back to the `npmmirror` registry if the official registry fails
 
 ---
 
@@ -121,8 +123,7 @@ Installs the latest stable `dshmarket` (`latest`) automatically, letting you bro
 | Content | Location |
 | --- | --- |
 | dsh user profile (plugins, config) | `%USERPROFILE%\.dsh\profiles\web` |
-| Runtime log (stdout) | `%USERPROFILE%\dsh-web.log` |
-| Error log | `%USERPROFILE%\dsh-web.err.log` |
+| All logs (launcher + dsh output) | `dsh.log` (app directory) |
 | Isolated browser profile | `%LOCALAPPDATA%\DeepSeekHarness\BrowserProfile` |
 | Service port | default `3080` (per actual dsh output) |
 
@@ -141,9 +142,9 @@ https://nodejs.org/en/download
 ### What does the first run download?
 
 - `@deepseek-ai/dsh` (DeepSeek Harness itself)
-- dsh profile dependencies (`dsh-power-button`, `dshmarket`, `dsh-base`, `dsh-web-app`)
+- `dshmarket` and dsh profile dependencies (`dshmarket`, `dsh-base`, `dsh-web-app`) — `dsh-power-button` is bundled, no download needed
 
-All are installed from npm over the network, so keep the connection available; if installation is slow or fails, consider configuring an npm registry mirror and retrying.
+All are installed from npm over the network, so keep the connection available; if installation is slow or fails, the launcher automatically retries with the `npmmirror` registry.
 
 ### Why does the launcher prefer pnpm?
 
@@ -169,10 +170,9 @@ No. Everything is installed and configured inside your user directory, so no adm
 
 ## 🛠️ Troubleshooting
 
-On failure, the launcher shows a clear error message and writes detailed logs to:
+On failure, the launcher shows a clear error message and writes detailed logs to the app directory (the exe's folder):
 
-- `%USERPROFILE%\dsh-web.log` — dsh stdout
-- `%USERPROFILE%\dsh-web.err.log` — dsh stderr
+- `dsh.log` — launcher full log + dsh stdout + dsh stderr (unified)
 
 Common errors and fixes:
 
@@ -182,12 +182,12 @@ Common errors and fixes:
 | DeepSeek dsh install failed | Network issue / npm registry unreachable | Check network or configure an npm mirror, then retry |
 | dsh plugin dependency install failed (exit code N) | Network issue / pnpm unavailable | Check network and npm logs, then retry |
 | dsh-power-button not found after install | Incomplete plugin install | Re-run the launcher |
-| dsh process exited with code N | dsh runtime error | Inspect `dsh-web.err.log` |
+| dsh process exited with code N | dsh runtime error | Inspect `dsh.log` |
 | dsh Web service not started within 180 s | Slow startup / port in use | Check the logs and retry shortly |
 | No browser found | No Chromium-based browser installed | Install Edge / Chrome / Brave and retry |
 
 > Tip: read the logs in Notepad, or with PowerShell
-> `Get-Content "$env:USERPROFILE\dsh-web.err.log" -Tail 50`.
+> `Get-Content ".\dsh.log" -Tail 50`.
 
 ---
 
@@ -200,9 +200,10 @@ DeepSeekHarness-Whale-Girl-Installer-Launcher/
 ├── build/
 │   └── Program.cs          # WinForms launcher core source (all features)
 ├── DeepSeekHarness.exe     # Launcher main program (portable, double-click to run)
-├── DeepSeekHarness-Whale-Girl-Launcher-v2.0.0.zip  # Release archives
+├── DeepSeekHarness-Whale-Girl-Launcher-v3.0.0.zip  # Release archives
 ├── deepseek-harness.ico    # Launcher icon (embedded at build time)
 ├── download.gif            # Whale Girl startup animation (embedded as a resource)
+├── dsh-power-button.zip    # Bundled power-button plugin (embedded at build time)
 ├── startup-preview.png     # Startup screen preview (for docs)
 ├── LICENSE                 # MIT license
 ├── README.md               # Chinese documentation
@@ -224,7 +225,9 @@ From the repository root in PowerShell, using the C# compiler bundled with .NET 
   /r:System.Drawing.dll `
   /r:System.Windows.Forms.dll `
   /r:System.Web.Extensions.dll `
+  /r:System.IO.Compression.dll `
   /resource:download.gif,download.gif `
+  /resource:dsh-power-button.zip,dsh-power-button.zip `
   /out:DeepSeekHarness.exe `
   build\Program.cs
 ```
@@ -235,7 +238,7 @@ From the repository root in PowerShell, using the C# compiler bundled with .NET 
 2. Archive it as `DeepSeekHarness-Whale-Girl-Launcher-vX.Y.Z.zip`
 3. Publish to GitHub Releases (recommended) or distribute the zip / exe directly
 
-> Tip: `AssemblyVersion` / `AssemblyFileVersion` in `Program.cs` are currently `2.0.0.0`; remember to bump them when releasing a new version.
+> Tip: `AssemblyVersion` / `AssemblyFileVersion` in `Program.cs` are currently `3.0.0.0`; remember to bump them when releasing a new version.
 
 ### Roadmap
 

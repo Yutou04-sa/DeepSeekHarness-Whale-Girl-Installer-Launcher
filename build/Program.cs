@@ -83,6 +83,8 @@ internal static class Program
                     splash.CloseWhenReady(OpenStandaloneWeb);
                     return;
                 }
+                if (dshProcess != null && dshProcess.HasExited)
+                    throw new InvalidOperationException("dsh 进程已退出，退出码：" + dshProcess.ExitCode + "。请检查用户目录中的 dsh-web.err.log。");
                 Thread.Sleep(1000);
             }
             throw new TimeoutException("dsh Web 服务在 180 秒内未启动，请检查用户目录中的 dsh-web.err.log。");
@@ -132,7 +134,12 @@ internal static class Program
                 pnpmArguments = "--yes pnpm " + pnpmArguments;
             }
         }
-        if (pnpm != null) RunAndWait(pnpm, pnpmArguments, profile);
+        if (pnpm == null) throw new InvalidOperationException("未找到 npm，无法安装 dsh 插件依赖。");
+        int installExitCode = RunAndWait(pnpm, pnpmArguments, profile);
+        if (installExitCode != 0)
+            throw new InvalidOperationException("dsh 插件依赖安装失败，退出码：" + installExitCode + "。请检查网络连接和 npm 日志。");
+        if (!Directory.Exists(Path.Combine(profile, "node_modules", "dsh-power-button")))
+            throw new InvalidOperationException("dsh-power-button 安装后未找到，请重新启动安装器。");
         return profile;
     }
 

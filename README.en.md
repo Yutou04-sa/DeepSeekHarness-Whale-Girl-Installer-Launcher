@@ -112,7 +112,7 @@ Besides the floating button, starting the service can also be handled by the lau
 
 ### Plugin marketplace (dshmarket)
 
-Installs `dshmarket ^1.15.0` automatically, letting you browse and install community plugins from the DeepSeek Harness Web UI.
+Installs the latest stable `dshmarket` (`latest`) automatically, letting you browse and install community plugins from the DeepSeek Harness Web UI.
 
 ---
 

@@ -16,8 +16,8 @@ using System.Text.RegularExpressions;
 [assembly: AssemblyDescription("DeepSeek Harness launcher")]
 [assembly: AssemblyProduct("DeepSeek Harness")]
 [assembly: AssemblyCompany("DeepSeek")]
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.0.1.0")]
+[assembly: AssemblyFileVersion("2.0.1.0")]
 
 internal static class Program
 {
@@ -109,7 +109,7 @@ internal static class Program
 
         Dictionary<string, object> dependencies = GetDictionary(package, "dependencies");
         dependencies["dsh-power-button"] = "github:huasheng33991/dsh-power-button";
-        dependencies["dshmarket"] = "^1.15.0";
+        dependencies["dshmarket"] = "latest";
         Dictionary<string, object> dsh = GetDictionary(package, "dsh");
         Dictionary<string, object> profileConfig = GetDictionary(dsh, "profile");
         List<object> bundles = GetList(profileConfig, "bundles");

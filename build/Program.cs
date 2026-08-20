@@ -442,33 +442,11 @@ internal static class Program
 
     private static string ChooseBrowser(List<BrowserOption> browsers)
     {
-        string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeepSeekHarness", "browser.json");
-        try
-        {
-            if (File.Exists(settingsPath))
-            {
-                var saved = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(settingsPath)) as Dictionary<string, object>;
-                object savedPath;
-                if (saved != null && saved.TryGetValue("path", out savedPath) && savedPath is string && File.Exists((string)savedPath))
-                    return (string)savedPath;
-            }
-        }
-        catch { }
-
         if (browsers.Count == 0) return null;
         using (var chooser = new BrowserChoiceForm(browsers))
         {
             if (chooser.ShowDialog() == DialogResult.OK && chooser.SelectedPath != null)
-            {
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(settingsPath));
-                    var saved = new Dictionary<string, object> { { "path", chooser.SelectedPath } };
-                    File.WriteAllText(settingsPath, new JavaScriptSerializer().Serialize(saved), new UTF8Encoding(false));
-                }
-                catch { }
                 return chooser.SelectedPath;
-            }
         }
         return browsers[0].Path;
     }
